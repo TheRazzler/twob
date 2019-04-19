@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
+#include <ctype.h>
 
 /** The initial storage for the dynamically resizable column list */
 #define INIT_COL_STORAGE 100
@@ -36,13 +37,37 @@ typedef struct ColumnStruct {
 
 /** A range within a column */
 typedef struct RangeStruct {
+  /** The name of the column for this range */
+  char colName[COL_WIDTH_BUFFER];
   /** The value for this range */
   char value[COL_WIDTH_BUFFER];
   /** The weighted number of appearances in best */
-  double bestCount = 0;
+  double bestCount;
   /** The weighted number of appearances in rest */
-  double restCount = 0;
+  double restCount;
+  /** The score for this range */
+  double score;
 } Range;
+
+/**
+ * Removes whitespace at the front and back of src and copies that result to dest
+ * @param src the string to be trimmed and copied
+ * @param dest the destination for the copied string
+ */
+void trimCopy(char *dest, char *src) {
+  while(isspace(*src))
+    src++;
+  
+  int len = strlen(src);
+  for(int i = len - 1; i >= 0; i--) {
+    if(isspace(src[i])) {
+      src[i] = '\0';
+    } else {
+      strcpy(dest, src);
+      return;
+    }
+  }
+}
 
 /**
  * Constructs a new column with the given name
@@ -51,7 +76,7 @@ typedef struct RangeStruct {
  */
 Column *newColumn(char name[COL_WIDTH_BUFFER]) {
   Column *c = malloc(sizeof(Column));
-  strcpy(c->name, name);
+  trimCopy(c->name, name);
   c->size = 0;
   c->length = INIT_COL_STORAGE;
   c->strings = malloc(sizeof(char *) * INIT_COL_STORAGE);
@@ -81,10 +106,11 @@ void destroyColumns(Column **columns) {
  * Adds a string to the given column
  * @param c the given column
  * @param value the string to add
- * @return true if the value could be added to the column
  */
-bool addString(Column *c, char *value) {
+void addString(Column *c, char *value) {
+  //If we run out of room in the buffer
   if(c->size == c->length) {
+    //Make some more and copy everything
     char **copy = malloc(sizeof(char *) * c->length * 2);
     for(int i = 0; i < c->length; i++) {
       copy[i] = malloc(sizeof(char) * COL_WIDTH_BUFFER);
@@ -95,7 +121,54 @@ bool addString(Column *c, char *value) {
   }
   c->strings[c->size] = malloc(sizeof(char) * COL_WIDTH_BUFFER);
   strcpy(c->strings[c->size++], value);
-  return true;
+}
+
+/**
+ * @return a new range with the given name and value
+ */
+Range *newRange(char colName[COL_WIDTH_BUFFER], char value[COL_WIDTH_BUFFER]) {
+  Range *r = malloc(sizeof(Range));
+  strcpy(r->colName, colName);
+  strcpy(r->value, value);
+  r->bestCount = 0;
+  r->restCount = 0;
+  return r;
+}
+
+/**
+ * Adds a value to the given list of ranges.
+ * This only stores unique ranges, if a value is not unique, the corresponding struct has its count
+ * incremented.
+ * @param ranges the list of ranges
+ * @param colName the name for the column this range is in
+ * @param value the value for the range
+ * @param best whether or not this value appears in best or rest
+ * @param count the size of the best/rest list
+ */
+void addValue(Range **ranges, char colName[COL_WIDTH_BUFFER], char value[COL_WIDTH_BUFFER], 
+              bool best, int count) {
+  Range *range = ranges[0];
+  int idx = 0;
+  while(range != NULL) {
+    //If we already have a range with the given value
+    if(strcmp(range->value, value) == 0) {
+      //Increment the score accordingly
+      if(best) {
+        range->bestCount += 1 / (double) count;
+      } else {
+        range->restCount += 1 / (double) count;
+      }
+      return;
+    }
+    range = ranges[++idx];
+  }
+  //Otherwise, add a new range with the correct score
+  ranges[idx] = newRange(colName, value);
+  if(best) {
+    ranges[idx]->bestCount = 1 / (double) count;
+  } else {
+    ranges[idx]->restCount = 1 / (double) count;
+  }
 }
 
 /**
@@ -129,18 +202,17 @@ Column **toColumns(char *names) {
   int nameIdx = 0;
   char c = names[idx++];
   char name[COL_WIDTH_BUFFER];
+  //We have room for 50 columns, if there are more than 50, we're out of luck
   Column **columns = malloc(sizeof(Column *) * COL_WIDTH_BUFFER);
+  //This for loop is responsible for parsing a csv line for individual words
   for(;;) {
+    //If we're at the end of the line, add the built string to the columns list
     if(c == '\0') {
       name[nameIdx] = '\0';
       columns[numColumns++] = newColumn(name);
-      //Check for debugging
-      if(numColumns >= COL_WIDTH_BUFFER) {
-        printf("ERROR: NUM COLUMNS EXCEDING BUFFER SIZE\n");
-        exit(1);
-      }
       break;
     }
+    //If we reach a comma, we can cap off the string we're building
     if(c == ',') {
       name[nameIdx] = '\0';
       columns[numColumns++] = newColumn(name);
@@ -150,16 +222,21 @@ Column **toColumns(char *names) {
         printf("ERROR: NUM COLUMNS EXCEDING BUFFER SIZE\n");
         exit(1);
       }
+    //Otherwise, build on to the current string
     } else {
       name[nameIdx++] = c;
     }
+    //Get the next character from the line
     c = names[idx++];
   }
+  //Make only enough space for the number of columns that there actually are
   Column **final = malloc(sizeof(Column *) * numColumns);
   for(int i = 0; i < numColumns; i++) {
     final[i] = columns[i];
   }
+  //We don't need the too-big column list anymore
   free(columns);
+  //We don't need the line anymore
   free(names);
   return final;
 }
@@ -177,6 +254,7 @@ Column **populate(Column **columns) {
     int colIdx = 0;
     char cell[COL_WIDTH_BUFFER];
     int cellIdx = 0;
+    //We are again parsing the csv line for values, see above for details
     for(;;) {
       if(c == '\0') {
         cell[cellIdx] = '\0';
@@ -205,11 +283,13 @@ Column **populate(Column **columns) {
  * @return two arrays of columns, best and rest
  */
 Column ***bestRest(Column **columns) {
+  //The last column only has two values. One is higher, this is best, the other value is rest
   Column *klass = columns[numColumns - 1];
   char oneVal[COL_WIDTH_BUFFER];
   strcpy(oneVal, klass->strings[0]);
   for(int i = 1; i < klass->size; i++) {
     if(strcmp(oneVal, klass->strings[i]) != 0) {
+      //The lowest value will always start with '..'
       if(oneVal[0] == '.') {
         strcpy(restVal, oneVal);
         strcpy(bestVal, klass->strings[i]);
@@ -223,11 +303,13 @@ Column ***bestRest(Column **columns) {
   
   Column **best = malloc(sizeof(Column *) * numColumns);
   Column **rest = malloc(sizeof(Column *) * numColumns);
+  //Best and rest both have their own columns
   for(int i = 0; i < numColumns; i++) {
     best[i] = newColumn(columns[i]->name);
     rest[i] = newColumn(columns[i]->name);
   }
   
+  //For each row, if the row has the best value, add it to best, otherwise, add to rest
   for(int i = 0; i < klass->size; i++) {
     if(strcmp(klass->strings[i], bestVal) == 0) {
       for(int j = 0; j < numColumns; j++) {
@@ -240,6 +322,7 @@ Column ***bestRest(Column **columns) {
     }
   }
   
+  //We don't need the original column list anymore
   destroyColumns(columns);
   Column ***bestRest = malloc(sizeof(Column **) * 2);
   bestRest[0] = best;
@@ -247,8 +330,145 @@ Column ***bestRest(Column **columns) {
   return bestRest;
 }
 
+/**
+ * Create a seperate Range struct for each unique range in best and rest
+ * @param rowGroups the rows in best and rest
+ * @return a list of unique ranges for each column
+ */
 Range ***countRanges(Column ***rowGroups) {
-  Range ***rangeGroups = 
+  //The outer array is for each column
+  Range ***rangeGroups = malloc(sizeof(Range **) * numColumns);
+  for(int i = 0; i < numColumns; i++) {
+    //The number of rows in best
+    int bestSize = rowGroups[0][i]->size;
+    //The number of rows in rest
+    int restSize = rowGroups[1][i]->size;
+    //Since we aren't storing the number of ranges, we need the last element to be null
+    int rangeLength =  bestSize + restSize + 1;
+    rangeGroups[i] = malloc(sizeof(Range *) * rangeLength);
+    for(int j = 0; j < rangeLength; j++) {
+      rangeGroups[i][j] = NULL;
+    }
+    //Only ranges in independent columns go into best/rest
+    if(rowGroups[0][i]->independent) {
+      for(int j = 0; j < rowGroups[0][i]->size; j++) {
+        addValue(rangeGroups[i], rowGroups[0][i]->name, rowGroups[0][i]->strings[j], true, bestSize);
+      }
+      for(int j = 0; j < rowGroups[1][i]->size; j++) {
+        addValue(rangeGroups[i], rowGroups[1][i]->name, rowGroups[1][i]->strings[j], false, restSize);
+      }
+    }
+  }
+  //We no longer need the best and rest rows
+  destroyColumns(rowGroups[0]);
+  destroyColumns(rowGroups[1]);
+  free(rowGroups);
+  return rangeGroups;
+}
+
+/**
+ * Look at each range in rangeGroups and add it to a new list if the best score is greater than
+ * the rest score
+ * @param rangeGroups a list of unique ranges for each column
+ * @return a list of ranges with bestCount > restCount
+ */
+Range **filter(Range ***rangeGroups) {
+  int numRanges = 0;
+  //Look over the whole 2D array and count the number of Range structs
+  for(int i = 0; i < numColumns; i++) {
+    int idx = 0;
+    Range *range = rangeGroups[i][idx++];
+    while(range != NULL) {
+      numRanges++;
+      range = rangeGroups[i][idx++];
+    }
+  }
+  //Create a buffer which can hold, at max, every range
+  Range *filterBuffer[numRanges];
+  int filterIdx = 0;
+  for(int i = 0; i < numColumns; i++) {
+    int idx = 0;
+    Range *range = rangeGroups[i][idx++];
+    while(range != NULL) {
+      //Only add ranges who appear more often in best than in rest
+      if(range->bestCount > range->restCount) {
+        filterBuffer[filterIdx++] = range;
+      }
+      range = rangeGroups[i][idx++];
+    }
+    //We no longer need each range group
+    free(rangeGroups[i]);
+  }
+  //We no longer need the whole array of range groups
+  free(rangeGroups);
+  //Once again, we need space for the last element to be null
+  Range **filteredRanges = malloc(sizeof(Range *) * filterIdx + 1);
+  filteredRanges[filterIdx] = NULL;
+  for(int i = 0; i < filterIdx; i++) {
+    filteredRanges[i] = filterBuffer[i];
+  }
+  return filteredRanges;
+}
+
+/**
+ * Assigns a score to each range equivalent to b^2/(b + r)
+ * @param ranges a list of ranges
+ * @return the same list with scores assigned
+ */
+Range **assignScores(Range **ranges) {
+  int idx = 0;
+  Range *range = ranges[idx++];
+  while(range != NULL) {
+    //The output is represented as a percentage, not a decimal point
+    double best = range->bestCount * 100;
+    double rest = range->restCount * 100;
+    range->score = (best * best) / (best + rest);
+    range = ranges[idx++];
+  }
+  return ranges;
+}
+
+/**
+ * A comparator function for qsort which compares ranges
+ * @param p1 the location in memory of the first range
+ * @param p2 the location in memory of the second range
+ * @return <0 if p1 has a greater score than p2, >=0 otherwise
+ */
+int comparator(const void* p1, const void* p2) {
+  Range **r1 = (Range **)p1;
+  Range **r2 = (Range **)p2;
+  
+  return (int) (*r2)->score - (int) (*r1)->score;
+}
+
+/**
+ * Sort the given list of ranges by score
+ * @param ranges the list of ranges
+ * @return the list sorted by score
+ */
+Range **sort(Range **ranges) {
+  int length = 0;
+  Range *range = ranges[length];
+  while(range != NULL)
+    range = ranges[++length];
+  qsort(ranges, length, sizeof(Range *), comparator);
+  return ranges;
+}
+
+/**
+ * Print the list of ranges according to the format specified by the assignment
+ * @param ranges the list of ranges
+ */
+void print(Range **ranges) {
+  int idx = 0;
+  Range *range = ranges[idx++];
+  while(range != NULL) {
+    printf("%d\t%.0f\t%s\t%s\t%.0f\t%.0f\n", idx, range->score, range->colName, range->value, 
+           range->bestCount * 100, range->restCount * 100);
+    free(range);
+    range = ranges[idx++];
+  }
+  free(ranges);
 }
 
 
@@ -257,18 +477,5 @@ Range ***countRanges(Column ***rowGroups) {
  * @return 0 if the program exits successfully
  */
 int main() {
-  Column ***groups = bestRest(populate(toColumns(getLine())));
-  for(int i = 0; i < 2; i++) {
-    for(int j = 0; j < groups[i][0]->size; j++) {
-      printf("%s", groups[i][0]->strings[j]);
-      for(int k = 1; k < numColumns; k++) {
-        printf(",%s", groups[i][k]->strings[j]);
-      }
-      printf("\n");
-    }
-  }
-  
-  destroyColumns(groups[0]);
-  destroyColumns(groups[1]);
-  free(groups);
+  print(sort(assignScores(filter(countRanges(bestRest(populate(toColumns(getLine()))))))));
 }
