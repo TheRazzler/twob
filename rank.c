@@ -1,3 +1,13 @@
+/**
+ * Replaces rank in the pipe described in CSC417
+ * Uses the pipe/filter pattern: 
+ * getLine | toColumns | populate | bestRest | countRanges | filter | assignScores | sort | print
+ * @file rank.c
+ * @author Spencer Yoder
+ * @author Thea Wall
+ * @author Josef Dewberry
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
