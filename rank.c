@@ -2,6 +2,10 @@
  * Replaces rank in the pipe described in CSC417
  * Uses the pipe/filter pattern: 
  * getLine | toColumns | populate | bestRest | countRanges | filter | assignScores | sort | print
+ * Uses tatrum pattern: see every Tantrum comment
+ * Uses quarentine pattern:
+ * All input is handled through readLines() (called only in main)
+ * All output is handled through print() (called only in main)
  * @file rank.c
  * @author Spencer Yoder
  * @author Thea Wall
@@ -27,6 +31,12 @@ int numColumns = 0;
 char bestVal[COL_WIDTH_BUFFER];
 /** The symbol in !klass column for rest */
 char restVal[COL_WIDTH_BUFFER];
+/** All lines of input */
+char **inputLines;
+/** Index of current line */
+int inputLineIdx = 0;
+/** Total number of lines */
+int lineTotal = 0;
 
 
 /** Stores the name of a column and a dynamically resizable array of either numbers or strings */
@@ -80,7 +90,7 @@ void trimCopy(char *dest, char *src) {
     return;
   }
   if(src == NULL) {
-    error("trimCopy: dest cannot be null");
+    error("trimCopy: src cannot be null");
     return;
   }
   while(isspace(*src))
@@ -273,7 +283,7 @@ void addValue(Range **ranges, char colName[COL_WIDTH_BUFFER], char value[COL_WID
 /**
  * @return a line from standard input
  */
-char *getLine() {
+char *readLine() {
   char *buffer = malloc(sizeof(char) * LINE_BUFFER);
   int c = getchar();
   if(c == EOF) {
@@ -289,6 +299,39 @@ char *getLine() {
   }
   buffer[i] = '\0';
   return buffer;
+}
+
+/**
+ * Read in every line from standard input and store it in the array
+ */
+void readLines() {
+  int length = 100;
+  inputLines = malloc(sizeof(char *) * length);
+  char *line = readLine();
+  while(line != NULL) {
+    if(lineTotal >= length) {
+      length *= 2;
+      char **copy = malloc(sizeof(char *) * length);
+      for(int i = 0; i < lineTotal; i++) {
+        copy[i] = malloc(sizeof(char) * LINE_BUFFER);
+        strcpy(copy[i], inputLines[i]);
+        free(inputLines[i]);
+      }
+      free(inputLines);
+      inputLines = copy;
+    }
+    inputLines[lineTotal++] = line;
+    line = readLine();
+  }
+}
+
+/**
+ * @return a line from the data structure
+ */
+char *getLine() {
+  if(inputLineIdx >= lineTotal)
+    return NULL;
+  return inputLines[inputLineIdx++];
 }
 
 /**
@@ -393,8 +436,10 @@ Column **populate(Column **columns) {
       }
       c = line[lineIdx++];
     }
+    free(line);
     line = getLine();
   }
+  free(inputLines);
   return columns;
 }
 
@@ -674,5 +719,6 @@ void print(Range **ranges) {
  * @return 0 if the program exits successfully
  */
 int main() {
+  readLines();
   print(sort(assignScores(filter(countRanges(bestRest(populate(toColumns(getLine()))))))));
 }
