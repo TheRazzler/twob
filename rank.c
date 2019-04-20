@@ -104,7 +104,8 @@ void destroyColumns(Column **columns) {
   for(int i = 0; i < numColumns; i++) {
     Column *c = columns[i];
     for(int j = 0; j < c->size; j++) {
-      free(c->strings[i]);
+      if(c != NULL)
+        free(c->strings[j]);
     }
     free(c->strings);
     free(c);
@@ -119,15 +120,17 @@ void destroyColumns(Column **columns) {
  */
 void addString(Column *c, char *value) {
   //If we run out of room in the buffer
-  if(c->size == c->length) {
+  if(c->size >= c->length) {
     //Make some more and copy everything
     char **copy = malloc(sizeof(char *) * c->length * 2);
     for(int i = 0; i < c->length; i++) {
       copy[i] = malloc(sizeof(char) * COL_WIDTH_BUFFER);
       strcpy(copy[i], c->strings[i]);
+      free(c->strings[i]);
     }
     free(c->strings);
     c->strings = copy;
+    c->length *= 2;
   }
   c->strings[c->size] = malloc(sizeof(char) * COL_WIDTH_BUFFER);
   strcpy(c->strings[c->size++], value);
@@ -401,7 +404,9 @@ Range **filter(Range ***rangeGroups) {
     Range *range = rangeGroups[i][idx++];
     while(range != NULL) {
       //Only add ranges who appear more often in best than in rest
-      if(range->bestCount > range->restCount) {
+      double best = range->bestCount * 100;
+      double rest = range->restCount * 100;
+      if(best - rest > 0.01) {
         filterBuffer[filterIdx++] = range;
       }
       range = rangeGroups[i][idx++];
