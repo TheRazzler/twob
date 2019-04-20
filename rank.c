@@ -59,12 +59,30 @@ typedef struct RangeStruct {
   double score;
 } Range;
 
+void error(char *str) {
+  //Tantrum
+  if(str == NULL) {
+    error("error: Error string cannot be null");
+    return;
+  }
+  fprintf(stderr, "%s\n", str);
+}
+
 /**
  * Removes whitespace at the front and back of src and copies that result to dest
  * @param src the string to be trimmed and copied
  * @param dest the destination for the copied string
  */
 void trimCopy(char *dest, char *src) {
+  //Tantrum
+  if(dest == NULL) {
+    error("trimCopy: dest cannot be null");
+    return;
+  }
+  if(src == NULL) {
+    error("trimCopy: dest cannot be null");
+    return;
+  }
   while(isspace(*src))
     src++;
   
@@ -85,6 +103,11 @@ void trimCopy(char *dest, char *src) {
  * @return a pointer to the constructed column
  */
 Column *newColumn(char name[COL_WIDTH_BUFFER]) {
+  //Tantrum
+  if(name == NULL || name[0] == '\0') {
+    error("newColumn: Name cannot be empty");
+    return NULL;
+  }
   Column *c = malloc(sizeof(Column));
   trimCopy(c->name, name);
   c->size = 0;
@@ -101,11 +124,30 @@ Column *newColumn(char name[COL_WIDTH_BUFFER]) {
  * @param columns the array of column pointers
  */
 void destroyColumns(Column **columns) {
+  //Tantrum
+  if(columns == NULL) {
+    error("destroyColumns: columns cannot be null.");
+    return;
+  }
   for(int i = 0; i < numColumns; i++) {
     Column *c = columns[i];
+    //Tantrum
+    if(c == NULL) {
+      error("destroyColumns: column cannot be null.");
+      return;
+    }
+    //Tantrum
+    if(c->strings == NULL) {
+      error("destroyColumns: cell values cannot be null.");
+      return;
+    }
     for(int j = 0; j < c->size; j++) {
-      if(c != NULL)
-        free(c->strings[j]);
+      //Tantrum
+      if(c->strings[j] == NULL) {
+        error("destroyColumns: cell value cannot be null.");
+        return;
+      }
+      free(c->strings[j]);
     }
     free(c->strings);
     free(c);
@@ -119,6 +161,19 @@ void destroyColumns(Column **columns) {
  * @param value the string to add
  */
 void addString(Column *c, char *value) {
+  //Tantrum
+  if(c == NULL) {
+    error("addString: column cannot be null");
+    return;
+  }
+  if(value == NULL || value[0] == '\0') {
+    error("addString: value cannot be empty");
+    return;
+  }
+  if(value[0] == '?') {
+    error("addString: value cannot be unknown");
+    return;
+  }
   //If we run out of room in the buffer
   if(c->size >= c->length) {
     //Make some more and copy everything
@@ -140,6 +195,15 @@ void addString(Column *c, char *value) {
  * @return a new range with the given name and value
  */
 Range *newRange(char colName[COL_WIDTH_BUFFER], char value[COL_WIDTH_BUFFER]) {
+  //Tantrum
+  if(colName == NULL || colName[0] == '\0') {
+    error("newRange: Column name cannot be empty");
+    return NULL;
+  }
+  if(value == NULL || value[0] == '\0') {
+    error("newRange: value cannot be empty");
+    return NULL;
+  }
   Range *r = malloc(sizeof(Range));
   strcpy(r->colName, colName);
   strcpy(r->value, value);
@@ -160,6 +224,23 @@ Range *newRange(char colName[COL_WIDTH_BUFFER], char value[COL_WIDTH_BUFFER]) {
  */
 void addValue(Range **ranges, char colName[COL_WIDTH_BUFFER], char value[COL_WIDTH_BUFFER], 
               bool best, int count) {
+  //Tantrum
+  if(ranges == NULL) {
+    error("addValue: ranges cannot be null");
+    return;
+  }
+  if(colName == NULL || colName[0] == '\0') {
+    error("addValue: Column name cannot be empty");
+    return;
+  }
+  if(value == NULL || value[0] == '\0') {
+    error("addValue: value cannot be empty");
+    return;
+  }
+  if(count < 0) {
+    error("addValue: count must be a positive integer");
+    return;
+  }
   Range *range = ranges[0];
   int idx = 0;
   while(range != NULL) {
@@ -177,6 +258,11 @@ void addValue(Range **ranges, char colName[COL_WIDTH_BUFFER], char value[COL_WID
   }
   //Otherwise, add a new range with the correct score
   ranges[idx] = newRange(colName, value);
+  //Tantrum
+  if(ranges[idx] == NULL) {
+    error("Error from newRange");
+    return;
+  }
   if(best) {
     ranges[idx]->bestCount = 1 / (double) count;
   } else {
@@ -211,6 +297,10 @@ char *getLine() {
  * @return the array of column pointers
  */
 Column **toColumns(char *names) {
+  if(names == NULL || names[0] == '\0') {
+    error("toColumns: Name cannot be empty, error from getLine()");
+    return NULL;
+  }
   int idx = 0;
   int nameIdx = 0;
   char c = names[idx++];
@@ -230,14 +320,19 @@ Column **toColumns(char *names) {
       name[nameIdx] = '\0';
       columns[numColumns++] = newColumn(name);
       nameIdx = 0;
-      //Check for debugging
+      //Tantrum
       if(numColumns >= COL_WIDTH_BUFFER) {
-        printf("ERROR: NUM COLUMNS EXCEDING BUFFER SIZE\n");
-        exit(1);
+        error("toColumns: exceded column buffer");
+        return NULL;
       }
     //Otherwise, build on to the current string
     } else {
       name[nameIdx++] = c;
+      //Tantrum
+      if(nameIdx >= COL_WIDTH_BUFFER) {
+        error("toColumns: Name pointer larger than width buffer");
+        return NULL;
+      }
     }
     //Get the next character from the line
     c = names[idx++];
@@ -260,8 +355,18 @@ Column **toColumns(char *names) {
  * @return the populated array
  */
 Column **populate(Column **columns) {
+  //Tantrum
+  if(columns == NULL) {
+    error("populate: columns cannot be null, error from toColumns");
+    return NULL;
+  }
   char *line = getLine();
   while(line != NULL) {
+    //Tantrum
+    if(line[0] == '\0') {
+      error("populate: line cannot be empty");
+      return NULL;
+    }
     int lineIdx = 0;
     char c = line[lineIdx++];
     int colIdx = 0;
@@ -281,6 +386,10 @@ Column **populate(Column **columns) {
         cellIdx = 0;
       } else {
         cell[cellIdx++] = c;
+        //Tantrum
+        if(cellIdx >= COL_WIDTH_BUFFER) {
+          error("populate: exceding buffer capacity");
+        }
       }
       c = line[lineIdx++];
     }
@@ -296,6 +405,11 @@ Column **populate(Column **columns) {
  * @return two arrays of columns, best and rest
  */
 Column ***bestRest(Column **columns) {
+  //Tantrum
+  if(columns == NULL) {
+    error("bestRest: columns cannot be null, error from populate");
+    return NULL;
+  }
   //The last column only has two values. One is higher, this is best, the other value is rest
   Column *klass = columns[numColumns - 1];
   char oneVal[COL_WIDTH_BUFFER];
@@ -319,7 +433,17 @@ Column ***bestRest(Column **columns) {
   //Best and rest both have their own columns
   for(int i = 0; i < numColumns; i++) {
     best[i] = newColumn(columns[i]->name);
+    //Tantrum
+    if(best[i] == NULL) {
+      error("bestRest: best is null, error from newColumn");
+      return NULL;
+    }
     rest[i] = newColumn(columns[i]->name);
+    //Tantrum
+    if(rest[i] == NULL) {
+      error("bestRest: rest is null, error from newColumn");
+      return NULL;
+    }
   }
   
   //For each row, if the row has the best value, add it to best, otherwise, add to rest
@@ -349,9 +473,32 @@ Column ***bestRest(Column **columns) {
  * @return a list of unique ranges for each column
  */
 Range ***countRanges(Column ***rowGroups) {
+  //Tantrum
+  if(rowGroups == NULL) {
+    error("countRanges: rowGroups cannot be null, error from bestRest");
+    return NULL;
+  }
   //The outer array is for each column
   Range ***rangeGroups = malloc(sizeof(Range **) * numColumns);
+  //Tantrum
+  if(rowGroups[0] == NULL) {
+    error("countRange: best is null");
+    return NULL;
+  }
+  if(rowGroups[1] == NULL) {
+    error("countRange: rest is null");
+    return NULL;
+  }
   for(int i = 0; i < numColumns; i++) {
+    //Tantrum
+    if(rowGroups[0][i] == NULL) {
+      error("countRage: column in best is null");
+      return NULL;
+    }
+    if(rowGroups[1][i] == NULL) {
+      error("countRage: column in rest is null");
+      return NULL;
+    }
     //The number of rows in best
     int bestSize = rowGroups[0][i]->size;
     //The number of rows in rest
@@ -386,10 +533,20 @@ Range ***countRanges(Column ***rowGroups) {
  * @return a list of ranges with bestCount > restCount
  */
 Range **filter(Range ***rangeGroups) {
+  //Tantrum
+  if(rangeGroups == NULL) {
+    error("filter: rangeGroups is null, error from countRanges()");
+    return NULL;
+  }
   int numRanges = 0;
   //Look over the whole 2D array and count the number of Range structs
   for(int i = 0; i < numColumns; i++) {
     int idx = 0;
+    //Tantrum
+    if(rangeGroups[i] == NULL) {
+      error("filter: rangeColumn is null");
+      return NULL;
+    }
     Range *range = rangeGroups[i][idx++];
     while(range != NULL) {
       numRanges++;
@@ -431,12 +588,22 @@ Range **filter(Range ***rangeGroups) {
  * @return the same list with scores assigned
  */
 Range **assignScores(Range **ranges) {
+  //Tantrum
+  if(ranges == NULL) {
+    error("assignScores: ranges is null, error from filter()");
+    return NULL;
+  }
   int idx = 0;
   Range *range = ranges[idx++];
   while(range != NULL) {
     //The output is represented as a percentage, not a decimal point
     double best = range->bestCount * 100;
     double rest = range->restCount * 100;
+    //Tantrum
+    if(best + rest == 0) {
+      error("assignScores: Occurrences in best and rest is 0");
+      return NULL;
+    }
     range->score = (best * best) / (best + rest);
     range = ranges[idx++];
   }
@@ -450,6 +617,12 @@ Range **assignScores(Range **ranges) {
  * @return <0 if p1 has a greater score than p2, >=0 otherwise
  */
 int comparator(const void* p1, const void* p2) {
+  //Tantrum
+  if(p1 == NULL || p2 == NULL) {
+    error("comparator: Null comparator elements");
+    return 0;
+  }
+  
   Range **r1 = (Range **)p1;
   Range **r2 = (Range **)p2;
   
@@ -462,6 +635,11 @@ int comparator(const void* p1, const void* p2) {
  * @return the list sorted by score
  */
 Range **sort(Range **ranges) {
+  //Tantrum
+  if(ranges == NULL) {
+    error("sort: ranges is null, error from assignScores()");
+    return NULL;
+  }
   int length = 0;
   Range *range = ranges[length];
   while(range != NULL)
@@ -475,6 +653,10 @@ Range **sort(Range **ranges) {
  * @param ranges the list of ranges
  */
 void print(Range **ranges) {
+  if(ranges == NULL) {
+    error("print: ranges is null, error from sort()");
+    return;
+  }
   int idx = 0;
   Range *range = ranges[idx++];
   while(range != NULL) {

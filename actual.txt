@@ -1,5 +1,5 @@
-1	88	cylinders	6	92	3
-2	88	displacement	..258	92	3
+1	88	displacement	..258	92	3
+2	88	cylinders	6	92	3
 3	81	horsepower	..110	83	2
 4	57	model	73..75	67	11
 5	7	origin	2	8	2
