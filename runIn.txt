@@ -1,0 +1,5 @@
+make
+chmod +x dsl/monte_carlo
+chmod +x dsl/brooks2
+dsl/monte_carlo -n 2000 -s 1729 -v False | dsl/brooks2 | dom | bestrest | super | ../../rank
+exit
