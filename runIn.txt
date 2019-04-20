@@ -1,5 +1,8 @@
 make
 chmod +x dsl/monte_carlo
 chmod +x dsl/brooks2
+echo "Running as part of the pipe."
+echo "This will take some time."
+echo "Keep in mind that actual output will not exactly match expected, monte_carlo generates output randomly"
 dsl/monte_carlo -n 2000 -s 1729 -v False | dsl/brooks2 | dom | bestrest | super | ../../rank
 exit

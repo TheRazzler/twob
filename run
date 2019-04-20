@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+if which gcc; then
+  echo "gcc installed"
+else
+  sudo apt-get install build-essential
+  sudo apt-get install gcc
+fi
+
+echo "Compiling"
+gcc -Wall -std=c99 rank.c -o rank
+
+echo "Running with premade pipe input"
+cat bigInput.txt | ./rank
+
+echo "--------------------------------------------"
+echo "         Press enter to continue"
+echo "--------------------------------------------"
+read a
+
+cd 101/etc
+cat ../../runIn.txt | ./ide
