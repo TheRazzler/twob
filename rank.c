@@ -453,7 +453,7 @@ int comparator(const void* p1, const void* p2) {
   Range **r1 = (Range **)p1;
   Range **r2 = (Range **)p2;
   
-  return (int) (*r2)->score - (int) (*r1)->score;
+  return (int) (((*r2)->score - (*r1)->score) * 100);
 }
 
 /**
